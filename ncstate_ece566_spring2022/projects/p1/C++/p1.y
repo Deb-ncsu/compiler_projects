@@ -35,7 +35,9 @@ string funName;
 Module *M;
 LLVMContext TheContext;
 IRBuilder<> Builder(TheContext);
- 
+// regs stores the Value for a variable 
+// regs_left_shift stores the starting position 
+// regs_bit_width stores the width of a slice 
 std::map<std::string, Value*> regs;
 std::map<std::string, Value*> regs_left_shift;
 std::map<std::string, Value*> regs_bit_mask;
@@ -115,7 +117,7 @@ inputs:   IN params_list ENDLINE
 
   int arg_no=0;
   for(auto &a: Function->args()) {
-    cout << " Inside function argument declaration " << endl;
+    // Passing arguments here
     string str($2->at(arg_no));
     regs[str] = &a;
     arg_no++;
@@ -145,16 +147,13 @@ inputs:   IN params_list ENDLINE
 params_list: ID
 {
   vector<string> *my_param_list = new vector<string>;
-  cout << " Inside params list " << endl;
   string str($1);
-  cout << " Inside params list1 " << endl;
   my_param_list->push_back(str);
   $$ = my_param_list;
   // add ID to vector
 }
 | params_list COMMA ID
 {
-  cout << " Inside params_list COMMA ID " << endl;
   string str($3);
   $1->push_back(str);
 }
@@ -178,25 +177,25 @@ statements:   statement
 
 statement: bitslice_lhs ASSIGN expr ENDLINE
 {
-	//printf ("I am in statement \n");
         string str = $1->ID_name;
 	it = regs.find(str);
+	// If there is no value assigned for the variable 
+        // then we need to set the value for the variable otherwise 
+	// Otherwise we need to set the bits from the slice
 	if(it == regs.end()) {
-		cout << " string not found " << endl;
 		regs[str] = $3;
 	} else {
-		cout << " string found " << endl;
 		Value* my_not = Builder.CreateNot($1->bit_mask,"NOT");
 		Value* temp = Builder.CreateAnd(my_not, regs[str], "and");
 		Value* truncated_value = Builder.CreateAnd($1->bit_mask_rhs, $3, "and");
 		Value* left_shift = Builder.CreateShl(truncated_value,$1->left_shift,"left_shift");
 		regs[str] = Builder.CreateOr(left_shift,temp,"OR");
 	}
-        //printf ("Exiting bitslice_lhs ASSIGN expr ENDLINE \n");	
 
 } 
 | SLICE field_list ENDLINE { 
-		//printf (" Inside slice field_list "); 
+		// In case slice is matching to only ID (i.e. : (ID1,ID2,ID3)) we need
+		// to find out the mask and the starting position corresponding to each ID
 		if (is_only_ID==true) {
 			int count = 0;
 			while (!field_ID_vector.empty()) {
@@ -211,12 +210,11 @@ statement: bitslice_lhs ASSIGN expr ENDLINE
 ;
 
 field_list : field_list COMMA field
-           | field { //printf (" Inside slice field "); }
+           | field 
 ;
 
 field : ID COLON expr {
       		is_only_ID = false;
-      		//printf ("I am in field \n");
 		string str($1);
 		regs[str] = $3;
 		Value *bit_mask = Builder.CreateShl(Builder.getInt32(1), $3, "left_shift1");
@@ -225,7 +223,6 @@ field : ID COLON expr {
 		regs_bit_width[str] = Builder.getInt32(1);
 	}
 | ID LBRACKET expr RBRACKET COLON expr {
-		//printf ("I am inside ID LBRACKET expr RBRACKET COLON expr ");
 		is_only_ID = false;
 		string str($1);
 		Value *my_val1= Builder.CreateSub(Builder.getInt32(32), $3, "sub");
@@ -240,7 +237,7 @@ field : ID COLON expr {
                 string str($1);
                 is_only_ID = true;
 		current_field_val = 0;
-		//regs[str] = Builder.getInt32(current_field_val);
+		// str are pushed to a vector if only ID is matching 
 		field_ID_vector.push_back(str);
                 Value *bit_mask = Builder.CreateShl(Builder.getInt32(1), Builder.getInt32(current_field_val), "left_shift1");
                 regs_bit_mask[str] = bit_mask;
@@ -250,7 +247,6 @@ field : ID COLON expr {
 ;
 
 expr: bitslice { 
-        //printf ("Inside expression bitslice \n");
 	$$ = $1; 
 }
 | expr PLUS expr { $$ = Builder.CreateAdd($1, $3, "add"); }
@@ -258,22 +254,22 @@ expr: bitslice {
 | expr XOR expr  { $$ = Builder.CreateXor($1, $3, "xor"); }
 | expr AND expr  { $$ = Builder.CreateAnd($1, $3, "and"); }
 | expr OR expr   { $$ = Builder.CreateOr($1, $3, "or"); }
-| INV expr       { //printf ("Inside INV expr \n");
+| INV expr       { 
 		   $$ = Builder.CreateXor($2 , Builder.getInt32(-1) , "xor");
 		 }
 | BINV expr     {
-                        //printf ("Inside BINV expr \n");
+                        
                         Value *my_and = Builder.CreateAnd($2 , Builder.getInt32(1) , "and");
 			Value *my_xor = Builder.CreateXor(my_and , Builder.getInt32(1) , "and");
 			Value *my_and1 = Builder.CreateAnd($2 , Builder.getInt32(-2) , "and");
 			Value *my_or = Builder.CreateOr(my_and1 , my_xor , "or");
                         $$ = my_or;
 		}
-| expr MUL expr { //printf ("Inside Mul\n"); 
+| expr MUL expr {  
 		$$ = Builder.CreateMul($1, $3, "mul"); }
-| expr DIV expr { 	//printf ("Inside Div\n");
+| expr DIV expr { 	
 			$$ = Builder.CreateSDiv($1, $3, "div"); }
-| expr MOD expr {       //printf ("Inside Mod\n");
+| expr MOD expr {       
 			$$ = Builder.CreateSRem($1, $3, "rem"); }
 /* 566 only */
 | REDUCE AND LPAREN expr RPAREN { 
@@ -323,23 +319,22 @@ expr: bitslice {
 ;
 
 bitslice: ID {
-		//printf ("Inside bitsilce ID \n");
 		string str($1);
 		Value* my_val = regs[str];
+		// bitslice_left_shift this stores the number of left shifts needed 
+		// in bitslice_list_helper
 		bitslice_left_shift = Builder.getInt32(1);
 		$$ = my_val;
 	        bitslice_mask = Builder.getInt32(1);
 	     }
-| NUMBER { 	//printf ("Inside bitsilce number \n");
+| NUMBER { 	
 		$$ = Builder.getInt32($1);
-		//printf ("Exiting bit slice number \n"); 
 		bitslice_left_shift = Builder.getInt32(1); 
 		bitslice_mask = Builder.getInt32(1);
 	}
 | bitslice_list { $$ = $1; }
 | LPAREN expr RPAREN { $$ = $2; } 
 | bitslice NUMBER { 
-		  	//printf ("Inside bitsilce blitslice NUMBER \n");
 			Value* imm = Builder.getInt32($2);
 			Value *bit_mask = Builder.CreateShl(Builder.getInt32(1) , imm, "left_shift1");
 			Value *my_and = Builder.CreateAnd($1 , bit_mask , "and");
@@ -348,7 +343,7 @@ bitslice: ID {
 			bitslice_mask = Builder.getInt32(-1);  
 		}
 | bitslice DOT ID {
-			//printf ("Inside bitsilce blitslice DOT ID \n");
+			
 			string str($3);
 			it = regs_bit_mask.find(str);
         		if(it == regs_bit_mask.end()) {
@@ -358,13 +353,13 @@ bitslice: ID {
 			Value *bit_mask = regs_bit_mask[str];
 			Value *shift = regs_left_shift[str];
 			Value *my_and1 = Builder.CreateAnd($1 , bit_mask , "and");
+                	// bitslice_left_shift = width of the slice only if bitslice DOT ID rule is matching
 			bitslice_left_shift = regs_bit_width[str];
 			$$ = Builder.CreateLShr(my_and1 , shift, "right_shift");
 		 	bitslice_mask = Builder.getInt32(-1);
 		 }
 // 566 only
 | bitslice LBRACKET expr RBRACKET {
-		  	//printf ("Inside bitsilce LBRACKET expr RBRACKET \n");
 			Value *bit_mask = Builder.CreateShl(Builder.getInt32(1) , $3, "left_shift1");
 			Value *my_and = Builder.CreateAnd($1 , bit_mask , "and");
 			bitslice_left_shift = Builder.getInt32(1);
@@ -372,7 +367,6 @@ bitslice: ID {
 			bitslice_mask = Builder.getInt32(-1);
 		  }
 | bitslice LBRACKET expr COLON expr RBRACKET {
-			//printf ("Inside bitslice LBRACKET expr COLON expr RBRACKET \n");
 			Value *my_sub1 = Builder.CreateSub($3, $5, "sub");
 			Value *my_add1 = Builder.CreateAdd(my_sub1, Builder.getInt32(1),"add");
 			Value *my_val1= Builder.CreateSub(Builder.getInt32(32), my_add1, "sub");
@@ -391,19 +385,18 @@ bitslice_list: LBRACE bitslice_list_helper RBRACE { $$ = $2; }
 bitslice_list_helper:  bitslice { $$ =  Builder.CreateAnd($1 , bitslice_mask , "and"); 
 				}
 | bitslice_list_helper COMMA bitslice {
-	//printf ("I am inside bitslice_list_helper \n");
 	Value *res1 = Builder.CreateShl($1, bitslice_left_shift , "mul");
-	//printf ("I am inside bitslice_list_helper1 \n");
         Value* lsb_val = Builder.CreateAnd($3 , bitslice_mask , "and");
 	$$ = Builder.CreateAdd(res1,lsb_val, "add");
 }
 ;
 
-bitslice_lhs: ID { //printf ("Inside bitslice_lhs \n ");
+bitslice_lhs: ID { 
 		   struct bitslice_lhs_type * bit_slice_data = new struct bitslice_lhs_type; 
 		   string str($1);
 		   bit_slice_data->ID_name = str; 
-		   //printf ("In bitslice lhs ___ 1\n");
+		   // bit mask stores the mask, left_shift contains the starting location 
+		   // bit_mask_rhs store the mask for the rhs in case width of the rhs is higher than the slice
 		   bit_slice_data->bit_mask = Builder.getInt32(-1);
 		   bit_slice_data->left_shift = Builder.getInt32(0);
 		   bit_slice_data->bit_mask_rhs = Builder.getInt32(-1);
