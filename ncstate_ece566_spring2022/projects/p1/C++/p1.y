@@ -46,7 +46,8 @@ map<std::string, Value*>::iterator it;
 Value * bitslice_left_shift;
 Value * bitslice_mask;
 int current_field_val;
-bool is_only_ID;
+std::vector<bool> is_only_ID;
+std::vector<Value*> last_position;
 std::vector<std::string> field_ID_vector;
 struct bitslice_lhs_type {
 	string ID_name;
@@ -196,15 +197,20 @@ statement: bitslice_lhs ASSIGN expr ENDLINE
 | SLICE field_list ENDLINE { 
 		// In case slice is matching to only ID (i.e. : (ID1,ID2,ID3)) we need
 		// to find out the mask and the starting position corresponding to each ID
-		if (is_only_ID==true) {
-			int count = 0;
-			while (!field_ID_vector.empty()) {
-				string str(field_ID_vector.back());
-				regs_bit_mask[str] = Builder.CreateShl(regs_bit_mask[str] , Builder.getInt32(count), "left_shift1");
-				regs_left_shift[str] = Builder.CreateAdd(regs_left_shift[str],Builder.getInt32(count),"add");
-				count++;
-				field_ID_vector.pop_back();
+		int count = 0;
+		Value * my_last_position = Builder.getInt32(0);
+		while (!field_ID_vector.empty()) {
+			string str(field_ID_vector.back());
+			if (is_only_ID.back() == true) {
+				regs_bit_mask[str] = Builder.CreateShl(regs_bit_mask[str] , my_last_position, "left_shift1");
+				regs_left_shift[str] = Builder.CreateAdd(regs_left_shift[str],my_last_position,"add");
+				my_last_position = Builder.CreateAdd(my_last_position,Builder.getInt32(1),"add");
+			} else {
+				my_last_position = last_position.back(); 
 			}
+			field_ID_vector.pop_back();
+			is_only_ID.pop_back();
+			last_position.pop_back();
 		}
 }
 ;
@@ -214,16 +220,18 @@ field_list : field_list COMMA field
 ;
 
 field : ID COLON expr {
-      		is_only_ID = false;
+      		is_only_ID.push_back(false);
 		string str($1);
+		last_position.push_back(Builder.getInt32(0));
 		regs[str] = $3;
 		Value *bit_mask = Builder.CreateShl(Builder.getInt32(1), $3, "left_shift1");
 		regs_bit_mask[str] = bit_mask;
 		regs_left_shift[str] = $3;
 		regs_bit_width[str] = Builder.getInt32(1);
+		field_ID_vector.push_back(str);
 	}
 | ID LBRACKET expr RBRACKET COLON expr {
-		is_only_ID = false;
+		is_only_ID.push_back(false);
 		string str($1);
 		Value *my_val1= Builder.CreateSub(Builder.getInt32(32), $3, "sub");
 		Value *my_val2 = Builder.CreateLShr(Builder.getInt32(-1) , my_val1, "right_shift");
@@ -231,11 +239,15 @@ field : ID COLON expr {
 		regs_bit_mask[str] = bit_mask;
 		regs_left_shift[str] = $6;
 		regs_bit_width[str] = $3;
+		Value * my_last_position = Builder.CreateAdd($6,$3,"add");
+		last_position.push_back(my_last_position);
+		field_ID_vector.push_back(str);
 }
 // 566 only below
 | ID   {
                 string str($1);
-                is_only_ID = true;
+                is_only_ID.push_back(true);
+		last_position.push_back(Builder.getInt32(0));
 		current_field_val = 0;
 		// str are pushed to a vector if only ID is matching 
 		field_ID_vector.push_back(str);
@@ -473,7 +485,7 @@ unique_ptr<Module> parseP1File(const string &InputFilename)
   bitslice_left_shift = NULL;
   bitslice_mask = NULL;
   current_field_val = 0;
-  is_only_ID = false;
+  //is_only_ID = false;
   //yydebug = 1;
   if (yyparse() != 0)
     // errors, so discard module
