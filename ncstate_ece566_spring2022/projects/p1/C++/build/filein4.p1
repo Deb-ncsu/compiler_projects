@@ -1,0 +1,4 @@
+in none
+slice a,b,d
+x = 6
+final x.a

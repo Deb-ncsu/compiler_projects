@@ -1,0 +1,5 @@
+in none
+b = 834
+c = 1
+slice d[c+3]: 3
+final b.d
