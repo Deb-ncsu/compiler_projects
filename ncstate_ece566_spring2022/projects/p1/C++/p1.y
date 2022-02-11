@@ -197,7 +197,6 @@ statement: bitslice_lhs ASSIGN expr ENDLINE
 | SLICE field_list ENDLINE { 
 		// In case slice is matching to only ID (i.e. : (ID1,ID2,ID3)) we need
 		// to find out the mask and the starting position corresponding to each ID
-		int count = 0;
 		Value * my_last_position = Builder.getInt32(0);
 		while (!field_ID_vector.empty()) {
 			string str(field_ID_vector.back());
