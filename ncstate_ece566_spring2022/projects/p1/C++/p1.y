@@ -183,15 +183,19 @@ statement: bitslice_lhs ASSIGN expr ENDLINE
 	// If there is no value assigned for the variable 
         // then we need to set the value for the variable otherwise 
 	// Otherwise we need to set the bits from the slice
+	Value* orig_val;
 	if(it == regs.end()) {
-		regs[str] = $3;
+		//regs[str] = $3;
+		orig_val = Builder.getInt32(0);
 	} else {
-		Value* my_not = Builder.CreateNot($1->bit_mask,"NOT");
-		Value* temp = Builder.CreateAnd(my_not, regs[str], "and");
-		Value* truncated_value = Builder.CreateAnd($1->bit_mask_rhs, $3, "and");
-		Value* left_shift = Builder.CreateShl(truncated_value,$1->left_shift,"left_shift");
-		regs[str] = Builder.CreateOr(left_shift,temp,"OR");
+		orig_val = regs[str];
 	}
+	Value* my_not = Builder.CreateNot($1->bit_mask,"NOT");
+	Value* temp = Builder.CreateAnd(my_not, orig_val, "and");
+	Value* truncated_value = Builder.CreateAnd($1->bit_mask_rhs, $3, "and");
+	Value* left_shift = Builder.CreateShl(truncated_value,$1->left_shift,"left_shift");
+	regs[str] = Builder.CreateOr(left_shift,temp,"OR");
+	
 
 } 
 | SLICE field_list ENDLINE { 
@@ -443,7 +447,7 @@ bitslice_lhs: ID {
 		   $1->bit_mask_rhs = Builder.getInt32(1); 
 		   $1->left_shift = total_left_shift;
 		   $1->bit_mask = new_bit_mask;
-		   
+		   $$ = $1;		   
 }
 | bitslice_lhs LBRACKET expr COLON expr RBRACKET { 
 			Value *my_sub1 = Builder.CreateSub($3, $5, "sub");
@@ -457,6 +461,7 @@ bitslice_lhs: ID {
 			$1->bit_mask_rhs = my_val2;
 			$1->left_shift = total_left_shift;
 			$1->bit_mask = new_bit_mask;
+			$$ = $1;
 }
 ;
 
