@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
+#include <iostream>
 #include "llvm-c/Core.h"
 
 #include "llvm/IR/LLVMContext.h"
@@ -27,10 +27,10 @@
 using namespace llvm;
 
 static void CommonSubexpressionElimination(Module *);
-
+static bool isDead(Instruction &);
 static void summarize(Module *M);
 static void print_csv_file(std::string outputfile);
-
+static void PrintInstructions(Module *);
 static cl::opt<std::string>
         InputFilename(cl::Positional, cl::desc("<input bitcode>"), cl::Required, cl::init("-"));
 
@@ -162,7 +162,115 @@ static llvm::Statistic CSELdElim = {"", "CSELdElim", "CSE redundant loads"};
 static llvm::Statistic CSEStore2Load = {"", "CSEStore2Load", "CSE forwarded store to load"};
 static llvm::Statistic CSEStElim = {"", "CSEStElim", "CSE redundant stores"};
 
-static void CommonSubexpressionElimination(Module *) {
+static void CommonSubexpressionElimination(Module *M) {
     // Implement this function
+	std::set<Instruction*> dead_inst_list;
+	std::cout << " I am here " << std::endl;
+	// printing the instructions 
+	for (auto func = M->begin(); func!=M->end(); func++) {
+		// looping over functions
+		for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
+			// looping over basic block 
+			for (auto inst=basic_block->begin(); inst!=basic_block->end(); inst++) {
+				Instruction *my_inst = &(*inst);
+				my_inst->print(errs());
+				errs() << "\n";
+				if (isDead(*inst) == true) {
+				        errs() << "Dead instruction \n" ;
+					dead_inst_list.insert(&*inst);
+				}	       
+			}
+		}
+	}
+
+	// deleting dead instructions 
+	while(dead_inst_list.size()>0) {
+		Instruction* i= *dead_inst_list.begin();
+		dead_inst_list.erase(i);
+		i->eraseFromParent();
+		CSEDead++;
+	}
+	errs() << " Printing instructions \n";
+	PrintInstructions(M);
 }
 
+static bool isDead(Instruction &I) {
+	if ( I.use_begin() == I.use_end() )
+	{
+        int opcode = I.getOpcode();
+        switch(opcode){
+            case Instruction::Add:
+            case Instruction::FNeg:
+            case Instruction::FAdd:
+            case Instruction::Sub:
+            case Instruction::FSub:
+            case Instruction::Mul:
+            case Instruction::FMul:
+            case Instruction::UDiv:
+            case Instruction::SDiv:
+            case Instruction::FDiv:
+            case Instruction::URem:
+            case Instruction::SRem:
+            case Instruction::FRem:
+            case Instruction::Shl:
+            case Instruction::LShr:
+            case Instruction::AShr:
+            case Instruction::And:
+            case Instruction::Or:
+            case Instruction::Xor:
+            case Instruction::Alloca:
+            case Instruction::GetElementPtr:
+            case Instruction::Trunc:
+            case Instruction::ZExt:
+            case Instruction::SExt:
+            case Instruction::FPToUI:
+            case Instruction::FPToSI:
+            case Instruction::UIToFP:
+            case Instruction::SIToFP:
+            case Instruction::FPTrunc:
+            case Instruction::FPExt:
+            case Instruction::PtrToInt:
+            case Instruction::IntToPtr:
+            case Instruction::BitCast:
+            case Instruction::AddrSpaceCast:
+            case Instruction::ICmp:
+            case Instruction::FCmp:
+            case Instruction::PHI:
+            case Instruction::Select:
+            case Instruction::ExtractElement:
+            case Instruction::InsertElement:
+            case Instruction::ShuffleVector:
+            case Instruction::ExtractValue:
+            case Instruction::InsertValue:
+                return true; // dead, but this is not enough
+
+            case Instruction::Load:
+            {
+                LoadInst *li = dyn_cast<LoadInst>(&I);
+                if (li && li->isVolatile())
+                    return false;
+                return true;
+            }
+            default:
+                // any other opcode fails
+                return false;
+        }
+    }
+
+    return false;
+}
+
+static void PrintInstructions(Module *M) {
+
+	for (auto func = M->begin(); func!=M->end(); func++) {
+		// looping over functions
+		for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
+			// looping over basic block 
+			for (auto inst=basic_block->begin(); inst!=basic_block->end(); inst++) {
+				Instruction *my_inst = &(*inst);
+				my_inst->print(errs());
+				errs() << "\n";
+			}
+		}
+	}
+}
