@@ -190,6 +190,33 @@ static void CommonSubexpressionElimination(Module *M) {
 		i->eraseFromParent();
 		CSEDead++;
 	}
+	//errs() << " Printing instructions \n";
+	//PrintInstructions(M);
+	//SimplifyInstruction
+	for (auto func = M->begin(); func!=M->end(); func++) {
+		// looping over functions
+		for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
+			// looping over basic block 
+			for (auto inst=basic_block->begin(); inst!=basic_block->end(); inst++) {
+				Instruction *my_inst = &(*inst);
+				DataLayout my_dl(&(*M));
+				SimplifyQuery x(my_dl);
+				Value* my_simplified_inst = SimplifyInstruction(my_inst,x);
+				if (my_simplified_inst!=NULL) {
+					errs() << " Instruction Simplified \n"; 
+					my_inst->print(errs());
+					errs() << "\n";
+					Instruction *new_inst = dyn_cast<Instruction>(my_simplified_inst);
+					errs() << " new Instruction \n";
+					new_inst->print(errs());
+					errs() << "\n";
+				}
+
+				//my_inst->print(errs());
+				//errs() << "\n";
+			}
+		}
+	}
 	errs() << " Printing instructions \n";
 	PrintInstructions(M);
 }
