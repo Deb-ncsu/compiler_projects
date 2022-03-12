@@ -23,7 +23,7 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Analysis/InstructionSimplify.h"
-
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 using namespace llvm;
 
 static void CommonSubexpressionElimination(Module *);
@@ -163,6 +163,8 @@ static llvm::Statistic CSEStore2Load = {"", "CSEStore2Load", "CSE forwarded stor
 static llvm::Statistic CSEStElim = {"", "CSEStElim", "CSE redundant stores"};
 
 static void CommonSubexpressionElimination(Module *M) {
+	errs() << " Printing instructions \n";
+	PrintInstructions(M);
     // Implement this function
 	std::set<Instruction*> dead_inst_list;
 	std::cout << " I am here " << std::endl;
@@ -190,9 +192,7 @@ static void CommonSubexpressionElimination(Module *M) {
 		i->eraseFromParent();
 		CSEDead++;
 	}
-	//errs() << " Printing instructions \n";
-	//PrintInstructions(M);
-	//SimplifyInstruction
+	std::set<Instruction*> const_inst_list;
 	for (auto func = M->begin(); func!=M->end(); func++) {
 		// looping over functions
 		for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
@@ -207,15 +207,54 @@ static void CommonSubexpressionElimination(Module *M) {
 					my_inst->print(errs());
 					errs() << "\n";
 					Instruction *new_inst = dyn_cast<Instruction>(my_simplified_inst);
-					errs() << " new Instruction \n";
-					new_inst->print(errs());
-					errs() << "\n";
+					//const_inst_list.insert(&*my_inst);
+					if (new_inst!=NULL) {
+						errs() << " new Instruction \n";
+						new_inst->print(errs());
+						errs() << "\n";
+						// find the uses of the instruction 
+						using use_iterator = Value::use_iterator;
+						errs() << " Printing uses \n";
+						const_inst_list.insert(&*my_inst);
+						CSESimplify++;
+						for(use_iterator u = my_inst->use_begin(); u!=my_inst->use_end(); u++)
+						{
+							//errs() << " Printing uses \n";
+							Value *v = u->getUser();
+							v->print(errs(),true);
+							errs() << "\n";
+							for(unsigned op=0; op < dyn_cast<Instruction>(v)->getNumOperands(); op++) {
+								Instruction* def = dyn_cast<Instruction> (dyn_cast<Instruction>(v)->getOperand(op));
+								if (def != NULL) {
+									if (def == my_inst) {
+										errs() << "  Definition of op=" << op << " is:" ;
+										def->print(errs(),true);
+										errs() << "\n";
+										dyn_cast<Instruction>(v)->setOperand(op,new_inst);
+									}
+								}
+								/*errs() << "  Definition of op=" << op << " is:" ;
+								def->print(errs(),true);
+								errs() << "\n";*/
+							}
+						}
+
+						// Replacing instruction 
+						// ReplaceInstWithValue( inst, basic_block , my_simplified_inst);
+					}
 				}
 
 				//my_inst->print(errs());
 				//errs() << "\n";
 			}
 		}
+	}
+	// deleting simplified instructions 
+	while(const_inst_list.size()>0) {
+		Instruction* i= *const_inst_list.begin();
+		const_inst_list.erase(i);
+		i->eraseFromParent();
+		CSESimplify++;
 	}
 	errs() << " Printing instructions \n";
 	PrintInstructions(M);
