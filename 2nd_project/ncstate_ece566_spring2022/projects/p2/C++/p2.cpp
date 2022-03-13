@@ -25,12 +25,13 @@
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/IR/Dominators.h"
-#include "llvm/IR/Dominance.h"
+//#include "llvm/IR/Dominance.h"
 using namespace llvm;
 
 static void CommonSubexpressionElimination(Module *M);
 static bool isDead(Instruction &);
 static bool Simplify_Inst(Instruction *, Module*);
+static void cse_opt(Instruction *, BasicBlock* );
 static void CommonSubexpressionElimination_new(Module *M);
 static void summarize(Module *M);
 static void print_csv_file(std::string outputfile);
@@ -165,13 +166,19 @@ static llvm::Statistic CSELdElim = {"", "CSELdElim", "CSE redundant loads"};
 static llvm::Statistic CSEStore2Load = {"", "CSEStore2Load", "CSE forwarded store to load"};
 static llvm::Statistic CSEStElim = {"", "CSEStElim", "CSE redundant stores"};
 
-static void CommonSubexpressionElimination(Module *M) {
+static void CommonSubexpressionElimination(Module *M) {	
+	errs() << " Printing instructions \n";
+	PrintInstructions(M);
 	for (auto func = M->begin(); func!=M->end(); func++) {
+		// creating the dominator tree
+		DominatorTree DT; 	
+		DT.recalculate(*func);
                 // looping over functions
                 for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
                         // looping over basic block 
 			auto duplicate_inst = basic_block->begin();
 			auto inst=basic_block->begin();
+			//std::cout << " new basic block " << std::endl;
 			while (inst!=basic_block->end()) {
 				// finding out dead instructions
 				Instruction *my_inst = &(*inst);
@@ -191,8 +198,22 @@ static void CommonSubexpressionElimination(Module *M) {
 						inst++;
 					}
                                 	CSEDead++;
-					LLVMBasicBlockRef child = LLVMFirstDomChild(basic_block);
+					//LLVMBasicBlockRef child = LLVMFirstDomChild(basic_block);
 				} else {
+					BasicBlock *BB = &(*basic_block);
+					//bool is_dominate = DominatorTree::dominates(my_inst,BB);
+					bool is_dominate = DT.dominates(BB,BB);
+					for (auto new_bb_itr= func->begin(); new_bb_itr!=func->end(); new_bb_itr++) {
+						BasicBlock *BB1 = &(*new_bb_itr);
+						bool is_dominate = DT.dominates(BB,BB1);
+						//BB->begin()->print(errs());
+						//BB1->begin()->print(errs());
+						if (is_dominate) {
+							cse_opt(my_inst, BB1);
+						}
+						//std::cout << " is_dominate " << is_dominate << std::endl;
+						
+					}
 					duplicate_inst = inst;
 					inst++;
 				}
@@ -462,4 +483,60 @@ static bool Simplify_Inst(Instruction *inst, Module* M) {
 		}
 	}
 	return false;
+}
+
+static void cse_opt(Instruction *my_inst, BasicBlock* BB) {
+	std::set<Instruction*> matching_instruction;
+	if (my_inst->isTerminator()) { return; }
+	if (my_inst->getOpcode() == Instruction::Load || my_inst->getOpcode() == Instruction::Alloca || my_inst->getOpcode() == Instruction::Store || my_inst->getOpcode() == Instruction::FCmp || my_inst->getOpcode() == Instruction::VAArg || my_inst->getOpcode() == Instruction::Call ) {
+		return;
+	}
+	std::cout << " printing CSE instruction " << std::endl;
+	my_inst->print(errs(), true);
+	std::cout << std::endl;
+	for (auto inst=BB->begin(); inst!=BB->end(); inst++) {	
+		Instruction *cur_inst = &(*inst);
+		if (my_inst == cur_inst) { continue;}
+		if (my_inst->getOpcode() != cur_inst->getOpcode()) { continue;}
+		if (my_inst->getNumOperands() != cur_inst->getNumOperands()) { continue;}
+		bool all_operands_matching = true;
+		for(unsigned op=0; op < my_inst->getNumOperands(); op++) {
+			if (my_inst->getOperand(op)!=cur_inst->getOperand(op)) {
+				all_operands_matching = false;
+				break;
+			}
+		}
+		if (all_operands_matching) {
+			matching_instruction.insert(cur_inst);
+		}
+
+
+	}
+	while(matching_instruction.size()>0) {
+		Instruction* i= *matching_instruction.begin();
+		matching_instruction.erase(i);
+		// loop over all the uses of i to remove 
+		using use_iterator = Value::use_iterator;
+		std::set<Instruction*> all_uses;
+		for(use_iterator u = i->use_begin(); u!=i->use_end(); u++) {
+			Value *v = u->getUser();
+			all_uses.insert(dyn_cast<Instruction>(v));
+		}
+		while(all_uses.size()>0) {
+			Instruction *inst_to_update = *all_uses.begin();
+			for(unsigned op=0; op < inst_to_update->getNumOperands(); op++) {
+				Instruction* def = dyn_cast<Instruction> (inst_to_update->getOperand(op));
+				if (def != NULL) {
+					if (def == i) {
+						dyn_cast<Instruction>(inst_to_update)->setOperand(op,my_inst);
+					}
+				}
+			}
+			all_uses.erase(inst_to_update);
+		}
+		std::cout << " printing CSE instruction " << std::endl;
+		i->print(errs(), true);
+		i->eraseFromParent();
+		CSEElim++;
+	}
 }
