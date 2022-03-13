@@ -167,7 +167,7 @@ static llvm::Statistic CSEStore2Load = {"", "CSEStore2Load", "CSE forwarded stor
 static llvm::Statistic CSEStElim = {"", "CSEStElim", "CSE redundant stores"};
 
 static void CommonSubexpressionElimination(Module *M) {	
-	errs() << " Printing instructions \n";
+	 errs() << " Printing instructions \n";
 	PrintInstructions(M);
 	for (auto func = M->begin(); func!=M->end(); func++) {
 		// creating the dominator tree
@@ -491,7 +491,7 @@ static void cse_opt(Instruction *my_inst, BasicBlock* BB) {
 	if (my_inst->getOpcode() == Instruction::Load || my_inst->getOpcode() == Instruction::Alloca || my_inst->getOpcode() == Instruction::Store || my_inst->getOpcode() == Instruction::FCmp || my_inst->getOpcode() == Instruction::VAArg || my_inst->getOpcode() == Instruction::Call ) {
 		return;
 	}
-	std::cout << " printing CSE instruction " << std::endl;
+	std::cout << " printing my_inst " << std::endl;
 	my_inst->print(errs(), true);
 	std::cout << std::endl;
 	for (auto inst=BB->begin(); inst!=BB->end(); inst++) {	
