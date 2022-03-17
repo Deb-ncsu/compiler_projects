@@ -31,7 +31,7 @@ using namespace llvm;
 static void CommonSubexpressionElimination(Module *M);
 static bool isDead(Instruction &);
 static bool Simplify_Inst(Instruction *, Module*);
-static void cse_opt(Instruction *, BasicBlock* );
+static void cse_opt(Instruction *, BasicBlock*, bool );
 static void CommonSubexpressionElimination_new(Module *M);
 static void replaceUses(Instruction*, Instruction* );
 static void summarize(Module *M);
@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
 
     if (!NoCSE) {
         CommonSubexpressionElimination(M.get());
-        ReplaceLoadCSE(M.get());
+        //ReplaceLoadCSE(M.get());
     }
 
     // Collect statistics on Module
@@ -170,9 +170,9 @@ static llvm::Statistic CSEStore2Load = {"", "CSEStore2Load", "CSE forwarded stor
 static llvm::Statistic CSEStElim = {"", "CSEStElim", "CSE redundant stores"};
 
 static void CommonSubexpressionElimination(Module *M) {	
-	errs() << " Printing instructions \n";
-	PrintInstructions(M);
-	std::cout << " printing Instructions done " << std::endl;
+	//errs() << " Printing instructions \n";
+	//PrintInstructions(M);
+	//std::cout << " printing Instructions done " << std::endl;
 	BasicBlock *BB;
 	int func_count = 0;
 	for (auto func = M->begin(); func!=M->end(); func++) {
@@ -219,44 +219,80 @@ static void CommonSubexpressionElimination(Module *M) {
 						inst++;
 					}
 					//LLVMBasicBlockRef child = LLVMFirstDomChild(basic_block);
-				} else if (my_inst->getOpcode() == Instruction::Load ) {
-					//std::cout << " I am here " << std::endl;
-					//my_inst->print(errs());
-					auto iterator_for_load = inst;
-					iterator_for_load++;
-					//iterator_for_load->print(errs());
-					while (iterator_for_load!=basic_block->end()) {
-						//errs() << " Printing instructions \n";
-						//PrintInstructions(M);
-						//std::cout << " printing Instructions done " << std::endl;
-						//std::cout << " I am here1 " << std::endl;
-						Instruction *cur_inst = &(*iterator_for_load);
-						//std::cout << " I am here2 " << std::endl;
-						//cur_inst->print(errs());
-						//if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(0) == cur_inst->getOperand(1) ) {break;}
-						if (cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke) {break;}
-						//std::cout << " I am here3 " << std::endl;
-						if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(0) == cur_inst->getOperand(0) && my_inst->getType() == cur_inst->getType()) {
-							LoadInst *li = dyn_cast<LoadInst>(cur_inst);
-							//std::cout << " I am here4 " << std::endl;
-							if (li && li->isVolatile()) {
-								break;
-								
-							}
-							iterator_for_load++;
-							//std::cout << " I am here5 " << std::endl;
-							//replaceUses(my_inst,cur_inst);
-							//cur_inst->replaceAllUsesWith(my_inst);
-                            //cur_inst->eraseFromParent();
-							//CSELdElim++;
-                            //std::cout << " function count " << func_count << std::endl;
-                            continue;
-						}
-						iterator_for_load++;	
-					}
-					//std::cout << " I am here1 " << std::endl;
-					duplicate_inst = inst;
-					inst++;	
+				} else if (my_inst->getOpcode() == Instruction::Load || my_inst->getOpcode() == Instruction::Store) {
+				    //ReplaceLoadCSE_opt(inst,basic_block);	
+                    //inst++;	
+                    // looping over basic block 
+                    //auto duplicate_inst = inst;
+                	//auto inst=basic_block->begin();
+                        if (my_inst->getOpcode() == Instruction::Load ) {
+                			//std::cout << " I am here " << std::endl;
+                			//my_inst->print(errs());
+                			auto iterator_for_load = inst;
+                			iterator_for_load++;
+                			//iterator_for_load->print(errs());
+                			while (iterator_for_load!=basic_block->end()) {
+                				//errs() << " Printing instructions \n";
+                				//PrintInstructions(M);
+                				//std::cout << " printing Instructions done " << std::endl;
+                				//std::cout << " I am here1 " << std::endl;
+                				Instruction *cur_inst = &(*iterator_for_load);
+                				//std::cout << " I am here2 " << std::endl;
+                				//cur_inst->print(errs());
+                				//if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(0) == cur_inst->getOperand(1) ) {break;}
+                				if (cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke) {break;}
+                				//std::cout << " I am here3 " << std::endl;
+                				if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(0) == cur_inst->getOperand(0) && my_inst->getType() == cur_inst->getType()) {
+                					LoadInst *li = dyn_cast<LoadInst>(cur_inst);
+                					//std::cout << " I am here4 " << std::endl;
+                					if (li && li->isVolatile()) {
+                						break;
+                						
+                					}
+                					iterator_for_load++;
+                					//std::cout << " I am here5 " << std::endl;
+                					//replaceUses(my_inst,cur_inst);
+                					cur_inst->replaceAllUsesWith(my_inst);
+                                    cur_inst->eraseFromParent();
+                					CSELdElim++;
+                                }
+                
+                				iterator_for_load++;	
+                            }
+                        } else if (my_inst->getOpcode() == Instruction::Store) {
+                            auto iterator_for_store_check = inst;
+                            iterator_for_store_check++;
+                            while (iterator_for_store_check!=basic_block->end()) {
+                                Instruction *cur_inst = &(*iterator_for_store_check);
+                                if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(1) == cur_inst->getOperand(1) && (my_inst->getOperand(0))->getType() == (cur_inst->getOperand(0))->getType()) {
+                                    StoreInst *si = dyn_cast<StoreInst>(my_inst);
+                                    if (si && si->isVolatile()) {
+                						break;
+                						
+                					}
+                                    my_inst->eraseFromParent();
+                                    CSEStElim++;
+                                    inst = duplicate_inst;
+                                    break; 
+                                }
+                                if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(1) == cur_inst->getOperand(0) && (my_inst->getOperand(0))->getType() == cur_inst->getType()) {
+                					LoadInst *li = dyn_cast<LoadInst>(cur_inst);
+                                    if (li && li->isVolatile()) {
+                						break;
+                						
+                					}
+                					iterator_for_store_check++;
+                					//std::cout << " I am here5 " << std::endl;
+                					cur_inst->replaceAllUsesWith(my_inst->getOperand(0));
+                                    cur_inst->eraseFromParent();
+                					CSEStore2Load++;
+                                }
+                				if ( cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke || cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Load) {break;}
+                                iterator_for_store_check++;
+                            }
+                        }
+                		duplicate_inst = inst;
+                		inst++;	
 				} else {
 					BB = &(*basic_block);
 					//bool is_dominate = DominatorTree::dominates(my_inst,BB);
@@ -264,11 +300,15 @@ static void CommonSubexpressionElimination(Module *M) {
 						BasicBlock *BB1 = &(*new_bb_itr);
 						//std::cout << " before calling dominator " << std::endl;
 						bool is_dominate = DT.dominates(BB,BB1);
+						bool is_same_block = false;
+                        if (BB==BB1) {
+                            is_same_block = true;
+                        }
 						//std::cout << " before opt " << std::endl;
 						//BB->begin()->print(errs());
 						//BB1->begin()->print(errs());
 						if (is_dominate) {
-							cse_opt(my_inst, BB1);
+							cse_opt(my_inst, BB1, is_same_block);
 						}
 						//std::cout << " after opt " << std::endl;
 						//std::cout << " is_dominate " << is_dominate << std::endl;
@@ -280,10 +320,88 @@ static void CommonSubexpressionElimination(Module *M) {
 			}
                 }
         }
-	errs() << " Printing instructions \n";
-	PrintInstructions(M);
+	//errs() << " Printing instructions \n";
+	//PrintInstructions(M);
 
 }
+/* static void ReplaceLoadCSE_opt (Instruction *inst, BasicBlock *BB) {
+ 
+    // looping over basic block 
+    auto duplicate_inst = inst;
+	//auto inst=basic_block->begin();
+	while (inst!=BB->end()) {
+		 Instruction *my_inst = &(*inst);
+        if (my_inst->getOpcode() == Instruction::Load ) {
+			//std::cout << " I am here " << std::endl;
+			//my_inst->print(errs());
+			auto iterator_for_load = inst;
+			iterator_for_load++;
+			//iterator_for_load->print(errs());
+			while (iterator_for_load!=basic_block->end()) {
+				//errs() << " Printing instructions \n";
+				//PrintInstructions(M);
+				//std::cout << " printing Instructions done " << std::endl;
+				//std::cout << " I am here1 " << std::endl;
+				Instruction *cur_inst = &(*iterator_for_load);
+				//std::cout << " I am here2 " << std::endl;
+				//cur_inst->print(errs());
+				//if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(0) == cur_inst->getOperand(1) ) {break;}
+				if (cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke) {break;}
+				//std::cout << " I am here3 " << std::endl;
+				if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(0) == cur_inst->getOperand(0) && my_inst->getType() == cur_inst->getType()) {
+					LoadInst *li = dyn_cast<LoadInst>(cur_inst);
+					//std::cout << " I am here4 " << std::endl;
+					if (li && li->isVolatile()) {
+						break;
+						
+					}
+					iterator_for_load++;
+					//std::cout << " I am here5 " << std::endl;
+					//replaceUses(my_inst,cur_inst);
+					cur_inst->replaceAllUsesWith(my_inst);
+                    cur_inst->eraseFromParent();
+					CSELdElim++;
+                }
+
+				iterator_for_load++;	
+            }
+        } else if (my_inst->getOpcode() == Instruction::Store) {
+            auto iterator_for_store_check = inst;
+            iterator_for_store_check++;
+            while (iterator_for_store_check!=basic_block->end()) {
+                Instruction *cur_inst = &(*iterator_for_store_check);
+                if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(1) == cur_inst->getOperand(1) && (my_inst->getOperand(0))->getType() == (cur_inst->getOperand(0))->getType()) {
+                    StoreInst *si = dyn_cast<StoreInst>(my_inst);
+                    if (si && si->isVolatile()) {
+						break;
+						
+					}
+                    my_inst->eraseFromParent();
+                    CSEStElim++;
+                    inst = duplicate_inst;
+                    break; 
+                }
+                if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(1) == cur_inst->getOperand(0) && (my_inst->getOperand(0))->getType() == cur_inst->getType()) {
+					LoadInst *li = dyn_cast<LoadInst>(cur_inst);
+                    if (li && li->isVolatile()) {
+						break;
+						
+					}
+					iterator_for_store_check++;
+					//std::cout << " I am here5 " << std::endl;
+					cur_inst->replaceAllUsesWith(my_inst->getOperand(0));
+                    cur_inst->eraseFromParent();
+					CSEStore2Load++;
+                }
+				if ( cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke || cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Load) {break;}
+                iterator_for_store_check++;
+            }
+        }
+		duplicate_inst = inst;
+		inst++;	
+    }
+ }*/
+
  static void ReplaceLoadCSE (Module *M) {
  
 	for (auto func = M->begin(); func!=M->end(); func++) {
@@ -355,7 +473,7 @@ static void CommonSubexpressionElimination(Module *M) {
                             cur_inst->eraseFromParent();
 							CSEStore2Load++;
                         }
-						if ( cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke || cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Load) {break;}
+						//if ( cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke || cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Load) {break;}
                         iterator_for_store_check++;
                     }
                 }
@@ -389,125 +507,6 @@ static void replaceUses(Instruction *inst_to_replace_with, Instruction* inst_to_
 }
 
 
-static void CommonSubexpressionElimination_new(Module *M) {
-	// errs() << " Printing instructions \n";
-	// PrintInstructions(M);
-    // Implement this function
-	std::set<Instruction*> dead_inst_list;
-	//std::cout << " I am here " << std::endl;
-	// printing the instructions 
-	for (auto func = M->begin(); func!=M->end(); func++) {
-		// looping over functions
-		for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
-			// looping over basic block 
-			for (auto inst=basic_block->begin(); inst!=basic_block->end(); inst++) {
-				//Instruction *my_inst = &(*inst);
-				//my_inst->print(errs());
-				//errs() << "\n";
-				if (isDead(*inst) == true) {
-				        //errs() << "Dead instruction \n" ;
-					dead_inst_list.insert(&*inst);
-				}	       
-			}
-		}
-	}
-
-	// deleting dead instructions 
-	while(dead_inst_list.size()>0) {
-		Instruction* i= *dead_inst_list.begin();
-		dead_inst_list.erase(i);
-		i->eraseFromParent();
-		CSEDead++;
-	}
-	//errs() << "After dead instruction pass Printing instructions \n";
-	//PrintInstructions(M);
-
-	std::set<Instruction*> const_inst_list;
-	std::set<Instruction*> adding_uses;
-	for (auto func = M->begin(); func!=M->end(); func++) {
-		// looping over functions
-		for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
-			// looping over basic block 
-			for (auto inst=basic_block->begin(); inst!=basic_block->end(); inst++) {
-				Instruction *my_inst = &(*inst);
-				DataLayout my_dl(&(*M));
-				SimplifyQuery x(my_dl);
-				if (my_inst->getOpcode() == Instruction::GetElementPtr) {
-					continue;
-				}
-				Value* my_simplified_inst = SimplifyInstruction(my_inst,x);
-				if (my_simplified_inst!=NULL) {
-					errs() << " Instruction Simplified \n"; 
-					my_inst->print(errs());
-					errs() << "\n";
-					Instruction *new_inst = dyn_cast<Instruction>(my_simplified_inst);
-					//const_inst_list.insert(&*my_inst);
-					if (new_inst!=NULL) {
-						errs() << " new Instruction \n";
-						new_inst->print(errs());
-						errs() << "\n";
-						// find the uses of the instruction 
-						using use_iterator = Value::use_iterator;
-						//errs() << " Printing uses \n";
-						const_inst_list.insert(&*my_inst);
-						// add all the uses in a container 
-						// we can not change the operand while 
-						// parsing through the uses , It will corrupt 
-						// the uses
-						std::set<Instruction*> all_uses;
-						
-						for(use_iterator u = my_inst->use_begin(); u!=my_inst->use_end(); u++)
-						{
-							//errs() << " Printing uses \n";
-							Value *v = u->getUser();
-							v->print(errs(),true);
-							errs() << "\n";
-							all_uses.insert(dyn_cast<Instruction>(v));
-						}
-						while(all_uses.size()>0) {
-							Instruction *inst_to_update = *all_uses.begin();
-							for(unsigned op=0; op < inst_to_update->getNumOperands(); op++) {
-								Instruction* def = dyn_cast<Instruction> (inst_to_update->getOperand(op));
-								if (def != NULL) {
-									if (def == my_inst) {
-										errs() << "  Definition of op=" << op << " is:" ;
-										def->print(errs(),true);
-										errs() << "\n";
-										dyn_cast<Instruction>(inst_to_update)->setOperand(op,new_inst);
-										errs() << "  New instruction is " ;
-										inst_to_update->print(errs(),true);
-										errs() << "\n";
-									}
-								}
-							}
-							all_uses.erase(inst_to_update);
-						}
-					}
-				}
-
-				//my_inst->print(errs());
-				//errs() << "\n";
-			}
-		}
-	}
-	// deleting simplified instructions
-	//errs() << " Printing Uses \n"; 
-	/*while(adding_uses.size()>0) {
-		Instruction* i= *adding_uses.begin();
-		i->print(errs(),true);
-		errs() << "\n";
-		adding_uses.erase(i);
-	}*/
-	while(const_inst_list.size()>0) {
-		Instruction* i= *const_inst_list.begin();
-		const_inst_list.erase(i);
-		i->eraseFromParent();
-		CSESimplify++;
-		//CSEElim++;
-	}
-	//errs() << " Printing instructions \n";
-	//PrintInstructions(M);
-}
 
 static bool isDead(Instruction &I) {
 	if ( I.use_begin() == I.use_end() )
@@ -598,9 +597,9 @@ static void PrintInstructions(Module *M) {
 
 static bool Simplify_Inst(Instruction *my_inst, Module* M) {
 
-	if (my_inst->getOpcode() == Instruction::Load || my_inst->getOpcode() == Instruction::Alloca || my_inst->getOpcode() == Instruction::Store || my_inst->getOpcode() == Instruction::FCmp || my_inst->getOpcode() == Instruction::VAArg || my_inst->getOpcode() == Instruction::Call ) {
+	/*if (my_inst->getOpcode() == Instruction::Load || my_inst->getOpcode() == Instruction::Alloca || my_inst->getOpcode() == Instruction::Store || my_inst->getOpcode() == Instruction::FCmp || my_inst->getOpcode() == Instruction::VAArg || my_inst->getOpcode() == Instruction::Call ) {
 		return false;
-	}
+	}*/
 	DataLayout my_dl(&(*M));
 	SimplifyQuery x(my_dl);
 	Value* my_simplified_inst = SimplifyInstruction(my_inst,x);
@@ -611,23 +610,42 @@ static bool Simplify_Inst(Instruction *my_inst, Module* M) {
 	return false;
 }
 
-static void cse_opt(Instruction *my_inst, BasicBlock* BB) {
+static void cse_opt(Instruction *my_inst, BasicBlock* BB, bool is_same_block) {
+	
 	std::set<Instruction*> matching_instruction;
 	if (my_inst->isTerminator()) { return; }
-	if (my_inst->getOpcode() == Instruction::Load || my_inst->getOpcode() == Instruction::Alloca || my_inst->getOpcode() == Instruction::Store || my_inst->getOpcode() == Instruction::FCmp || my_inst->getOpcode() == Instruction::VAArg || my_inst->getOpcode() == Instruction::Call ) {
+	if (my_inst->getOpcode() == Instruction::Load || my_inst->getOpcode() == Instruction::Alloca || my_inst->getOpcode() == Instruction::Store || my_inst->getOpcode() == Instruction::FCmp || my_inst->getOpcode() == Instruction::VAArg || my_inst->getOpcode() == Instruction::Call  || my_inst->getOpcode() == Instruction::ExtractValue ) {
 		return;
 	}
 	
 	//std::cout << " printing my_inst " << std::endl;
 	//my_inst->print(errs(), true);
 	//std::cout << std::endl;
-	for (auto inst=BB->begin(); inst!=BB->end(); inst++) {	
+	// If the basic block contains the original instruction
+	// we need to parse only the instructions
+	// below current instruction
+	auto inst1=BB->begin();
+	if (is_same_block) {
+		Instruction *cur_inst = &(*inst1);
+		while (cur_inst!=my_inst) {
+            //std::cout << " I am here " << std::endl;
+            inst1++;
+            cur_inst = &(*inst1);
+		}
+	}
+	for (auto inst=inst1; inst!=BB->end(); inst++) {	
 		Instruction *cur_inst = &(*inst);
 		if (my_inst == cur_inst) { continue;}
 		if (my_inst->getType() != cur_inst->getType()) { continue; }
 		if (my_inst->getOpcode() != cur_inst->getOpcode()) { continue;}
 		if (my_inst->getNumOperands() != cur_inst->getNumOperands()) { continue;}
-		bool all_operands_matching = true;
+		if (my_inst->getOpcode() == Instruction::ICmp) {
+            ICmpInst *my_inst_icmp = cast<ICmpInst>(my_inst);
+            ICmpInst *cur_inst_icmp = cast<ICmpInst>(cur_inst);
+            if (my_inst_icmp->getPredicate()!=cur_inst_icmp->getPredicate()) { continue; }
+            //std::cout << " ICmp" << std::endl;
+        } 
+        bool all_operands_matching = true;
 		for(unsigned op=0; op < my_inst->getNumOperands(); op++) {
 			if (my_inst->getOperand(op)!=cur_inst->getOperand(op)) {
 				all_operands_matching = false;
@@ -643,8 +661,9 @@ static void cse_opt(Instruction *my_inst, BasicBlock* BB) {
 	while(matching_instruction.size()>0) {
 		Instruction* i= *matching_instruction.begin();
 		matching_instruction.erase(i);
-		// loop over all the uses of i to remove 
-		using use_iterator = Value::use_iterator;
+		i->replaceAllUsesWith(my_inst);
+        // loop over all the uses of i to remove 
+		/*using use_iterator = Value::use_iterator;
 		std::set<Instruction*> all_uses;
 		for(use_iterator u = i->use_begin(); u!=i->use_end(); u++) {
 			Value *v = u->getUser();
@@ -661,9 +680,10 @@ static void cse_opt(Instruction *my_inst, BasicBlock* BB) {
 				}
 			}
 			all_uses.erase(inst_to_update);
-		}
+		}*/
 		//std::cout << " printing CSE instruction " << std::endl;
 		//i->print(errs(), true);
+		//std::cout << std::endl;
 		i->eraseFromParent();
 		CSEElim++;
 	}
