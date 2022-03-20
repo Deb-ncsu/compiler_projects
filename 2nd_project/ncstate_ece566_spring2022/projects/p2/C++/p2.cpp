@@ -241,30 +241,6 @@ static void CommonSubexpressionElimination(Module *M) {
                 				//cur_inst->print(errs());
                 				//if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(0) == cur_inst->getOperand(1) ) {break;}
                 				//if (cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Call ) {break;}
-						//CallInst *x = dyn_cast<CallInst>(cur_inst);
-						/*if (cur_inst->getOpcode() == Instruction::Call) {
-							CallInst *x = dyn_cast<CallInst>(cur_inst);
-							if (x!=NULL) {
-								//x->print(errs());
-								//std::cout << " has address taken" << x->hasAddressTaken() << std::endl;
-								auto *F = x->getCalledFunction();
-								//std::cout << " has address taken" << F->hasAddressTaken() << " does not access mem " << F->doesNotAccessMemory() << " only reads" << F->onlyReadsMemory() << " onlyAccessesArgMemory " << F->onlyAccessesArgMemory() << std::endl;
-								//bool isPrintf = (F->getName() == "printf");
-								if (F->hasAddressTaken()) {
-									break;
-								}
-									if( !(x->doesNotAccessMemory()) && !(x->onlyReadsMemory()) && !isPrintf) { 
-									//x->print(errs());
-									//std::cout << " isPrintf " << isPrintf ;
-									//std::cout << " Inside callInst " << std::endl;
-									break; 
-								} else {
-									x->print(errs());
-									std::cout << " isPrintf " << isPrintf ;
-									std::cout << " Inside callInst " << std::endl;
-								}
-							}
-						}*/
 						if (cur_inst->getOpcode() == Instruction::Store ) {break;}
                 				//std::cout << " I am here3 " << std::endl;
                 				if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(0) == cur_inst->getOperand(0) && my_inst->getType() == cur_inst->getType()) {
@@ -274,9 +250,8 @@ static void CommonSubexpressionElimination(Module *M) {
                 						break;
                 						
                 					}
-                					cur_inst->print(errs());
-							iterator_for_load++;
-                					//std::cout << " Inside replace " << std::endl;
+                					iterator_for_load++;
+                					//std::cout << " I am here5 " << std::endl;
                 					//replaceUses(my_inst,cur_inst);
                 					cur_inst->replaceAllUsesWith(my_inst);
                                     cur_inst->eraseFromParent();
@@ -303,7 +278,7 @@ static void CommonSubexpressionElimination(Module *M) {
 					store_to_load_upgrade_pos = true; 
 					load_eliminate_pos = false;
 					inst_to_replace = cur_inst;
-				} else if ( cur_inst->getOpcode() == Instruction::Store /*|| cur_inst->getOpcode() == Instruction::Call*/) {
+				} else if ( cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke ) {
 					load_eliminate_pos = false;
 					store_to_load_upgrade_pos = false;
 				} else if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(0) == cur_inst->getOperand(0) && my_inst->getType() == cur_inst->getType()) {
@@ -365,7 +340,7 @@ static void CommonSubexpressionElimination(Module *M) {
                                 	//iterator_for_store_check++;
 					continue;
 				}  
-				if (/* cur_inst->getOpcode() == Instruction::Call ||*/ cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Load) {break;}
+				if ( cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke || cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Load) {break;}
                                 	iterator_for_store_check++;
                             	}
                         }
@@ -659,16 +634,14 @@ static void PrintInstructions(Module *M) {
 		//std::cout << " function count " << func_count << std::endl;
 	    //if (func->empty() == true) {continue;}
             //func_count++;
- 	int b_count = 0;	
+	
         for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
 			// looping over basic block 
-			std::cout << " b_count " << b_count++ << std::endl;
 			for (auto inst=basic_block->begin(); inst!=basic_block->end(); inst++) {
 				Instruction *my_inst = &(*inst);
 				my_inst->print(errs());
 				errs() << "\n";
 			}
-			b_count++;
 		}
         
 	}
@@ -694,8 +667,7 @@ static void cse_opt(Instruction *my_inst, BasicBlock* BB, bool is_same_block) {
 	
 	std::set<Instruction*> matching_instruction;
 	if (my_inst->isTerminator()) { return; }
-	// my_inst->getOpcode() == Instruction::ExtractValue
-	if (my_inst->getOpcode() == Instruction::Load || my_inst->getOpcode() == Instruction::Alloca || my_inst->getOpcode() == Instruction::Store || my_inst->getOpcode() == Instruction::FCmp || my_inst->getOpcode() == Instruction::VAArg || my_inst->getOpcode() == Instruction::Call || my_inst->getOpcode() == Instruction::ExtractValue ) {
+	if (my_inst->getOpcode() == Instruction::Load || my_inst->getOpcode() == Instruction::Alloca || my_inst->getOpcode() == Instruction::Store || my_inst->getOpcode() == Instruction::FCmp || my_inst->getOpcode() == Instruction::VAArg || my_inst->getOpcode() == Instruction::Call  || my_inst->getOpcode() == Instruction::ExtractValue ) {
 		return;
 	}
 	
