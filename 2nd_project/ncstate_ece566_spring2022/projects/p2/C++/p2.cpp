@@ -176,38 +176,24 @@ static void CommonSubexpressionElimination(Module *M) {
 	BasicBlock *BB;
 	int func_count = 0;
 	for (auto func = M->begin(); func!=M->end(); func++) {
-		// creating the dominator tree
-		//std::cout << " function count " << func_count << std::endl;
-		//func_count++;
 		DominatorTree DT; 	
-		//std::cout << " failing here1 " << std::endl;
-		//auto *inst_to_check = func->begin()->begin();
 		bool is_empty = func->empty();
-		//std::cout << " is_empty " << is_empty << std::endl;
 		if (is_empty) { continue; }
-		//BasicBlock *c_b = &(*(func->begin()));
-		//Instruction *inst_to_check = &(*(c_b->begin()));
-		//std::cout << " function count " << func_count << std::endl;
 		func_count++;
-		//inst_to_check->print(errs());
 		DT.recalculate(*func);
-		//std::cout << " failing here2 " << std::endl;
         // looping over functions
         for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
             // looping over basic block 
 			auto duplicate_inst = basic_block->begin();
 			auto inst=basic_block->begin();
-			//std::cout << " new basic block " << std::endl;
 			while (inst!=basic_block->end()) {
 				// finding out dead instructions
 				Instruction *my_inst = &(*inst);
-				//Value* my_inst_value = dyn_cast<Value> my_inst;
-				//LLVMTypeOf(cast<Value>my_inst);
 				bool is_inst_dead = isDead(*my_inst);
 				bool is_simplifiable = Simplify_Inst (my_inst, M);
 				if (is_inst_dead == true) { CSEDead++; }
 				if (is_simplifiable == true) { CSESimplify++;}
-                if (is_inst_dead || is_simplifiable) {
+                		if (is_inst_dead || is_simplifiable) {
 					// if the instruction is the starting instruction 
 					if (inst==basic_block->begin()) {
 						duplicate_inst++;
@@ -218,155 +204,122 @@ static void CommonSubexpressionElimination(Module *M) {
 						inst = duplicate_inst;
 						inst++;
 					}
-					//LLVMBasicBlockRef child = LLVMFirstDomChild(basic_block);
 				} else if (my_inst->getOpcode() == Instruction::Load || my_inst->getOpcode() == Instruction::Store) {
-				    //ReplaceLoadCSE_opt(inst,basic_block);	
-                    //inst++;	
-                    // looping over basic block 
-                    //auto duplicate_inst = inst;
-                	//auto inst=basic_block->begin();
                         		if (my_inst->getOpcode() == Instruction::Load ) {
-                			//std::cout << " I am here " << std::endl;
-                			//my_inst->print(errs());
                 			auto iterator_for_load = inst;
                 			iterator_for_load++;
-                			//iterator_for_load->print(errs());
                 			while (iterator_for_load!=basic_block->end()) {
-                				//errs() << " Printing instructions \n";
-                				//PrintInstructions(M);
-                				//std::cout << " printing Instructions done " << std::endl;
-                				//std::cout << " I am here1 " << std::endl;
                 				Instruction *cur_inst = &(*iterator_for_load);
-                				//std::cout << " I am here2 " << std::endl;
-                				//cur_inst->print(errs());
-                				//if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(0) == cur_inst->getOperand(1) ) {break;}
-                				//if (cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Call ) {break;}
 						if (cur_inst->getOpcode() == Instruction::Store ) {break;}
-                				//std::cout << " I am here3 " << std::endl;
                 				if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(0) == cur_inst->getOperand(0) && my_inst->getType() == cur_inst->getType()) {
                 					LoadInst *li = dyn_cast<LoadInst>(cur_inst);
-                					//std::cout << " I am here4 " << std::endl;
                 					if (li && li->isVolatile()) {
                 						break;
                 						
                 					}
                 					iterator_for_load++;
-                					//std::cout << " I am here5 " << std::endl;
-                					//replaceUses(my_inst,cur_inst);
                 					cur_inst->replaceAllUsesWith(my_inst);
-                                    cur_inst->eraseFromParent();
+                                    			cur_inst->eraseFromParent();
                 					CSELdElim++;
-                                }
+                                		}
                 
                 				iterator_for_load++;	
-                            }
-			    // trace the instructions above
-			     LoadInst *li = dyn_cast<LoadInst>(my_inst);
-			     if (li && li->isVolatile()) {
-                		duplicate_inst = inst;
-                		inst++;
-				continue;	
-			     }
-			     auto iterator_for_load1 = basic_block->begin();
-			     bool load_eliminate_pos = false;
-			     bool store_to_load_upgrade_pos = false;
-			     Instruction *cur_inst;
-			     Instruction *inst_to_replace;
-			     while (iterator_for_load1!=inst) {
-			     	cur_inst = &(*iterator_for_load1);
-				if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(0) == cur_inst->getOperand(1) && my_inst->getType() == (cur_inst->getOperand(0))->getType()) { 
-					store_to_load_upgrade_pos = true; 
-					load_eliminate_pos = false;
-					inst_to_replace = cur_inst;
-				} else if ( cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke ) {
-					load_eliminate_pos = false;
-					store_to_load_upgrade_pos = false;
-				} else if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(0) == cur_inst->getOperand(0) && my_inst->getType() == cur_inst->getType()) {
-					load_eliminate_pos = true;	
-					inst_to_replace = cur_inst;
-					store_to_load_upgrade_pos = false;
-				}
-				iterator_for_load1++;
-			     }
-			     if (load_eliminate_pos == true) { 
-				     CSELdElim++; 
-			     	     my_inst->replaceAllUsesWith(inst_to_replace);
-			     }
-			     if (store_to_load_upgrade_pos == true) { 
-				     CSEStore2Load++; 
-				     my_inst->replaceAllUsesWith(inst_to_replace->getOperand(0));			     	     
-			     }
-			     if (load_eliminate_pos == true || store_to_load_upgrade_pos == true) {
-			     	 my_inst->print(errs());
-				 std::cout << " \t" ;
-				 inst_to_replace->print(errs());
-				 std::cout << std::endl;
-				 my_inst->eraseFromParent();
-			     	 inst = duplicate_inst;
-			     }
+                            		}
+			    		// trace the instructions above
+			     		LoadInst *li = dyn_cast<LoadInst>(my_inst);
+			     		if (li && li->isVolatile()) {
+                	     		   duplicate_inst = inst;
+                	     		   inst++;
+			     		   continue;	
+			     		}
+			     		auto iterator_for_load1 = basic_block->begin();
+			     		bool load_eliminate_pos = false;
+			     		bool store_to_load_upgrade_pos = false;
+			     		Instruction *cur_inst;
+			     		Instruction *inst_to_replace;
+			     		while (iterator_for_load1!=inst) {
+			     			cur_inst = &(*iterator_for_load1);
+			     		   if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(0) == cur_inst->getOperand(1) && my_inst->getType() == (cur_inst->getOperand(0))->getType()) { 
+			     		   	store_to_load_upgrade_pos = true; 
+			     		   	load_eliminate_pos = false;
+			     		   	inst_to_replace = cur_inst;
+			     		   } else if ( cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke ) {
+			     		   	load_eliminate_pos = false;
+			     		   	store_to_load_upgrade_pos = false;
+			     		   } else if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(0) == cur_inst->getOperand(0) && my_inst->getType() == cur_inst->getType()) {
+			     		   	load_eliminate_pos = true;	
+			     		   	inst_to_replace = cur_inst;
+			     		   	store_to_load_upgrade_pos = false;
+			     		   }
+			     		   iterator_for_load1++;
+			     		}
+			     		if (load_eliminate_pos == true) { 
+			     		        CSELdElim++; 
+			     			     my_inst->replaceAllUsesWith(inst_to_replace);
+			     		}
+			     		if (store_to_load_upgrade_pos == true) { 
+			     		        CSEStore2Load++; 
+			     		        my_inst->replaceAllUsesWith(inst_to_replace->getOperand(0));			     	     
+			     		}
+			     		if (load_eliminate_pos == true || store_to_load_upgrade_pos == true) {
+			     			 my_inst->print(errs());
+			     		    std::cout << " \t" ;
+			     		    inst_to_replace->print(errs());
+			     		    std::cout << std::endl;
+			     		    my_inst->eraseFromParent();
+			     			 inst = duplicate_inst;
+			     		}
 			     
-                        } else if (my_inst->getOpcode() == Instruction::Store) {
-                            auto iterator_for_store_check = inst;
-                            iterator_for_store_check++;
-			    StoreInst *si = dyn_cast<StoreInst>(my_inst);
-			    if (si && si->isVolatile()) {
+                        	} else if (my_inst->getOpcode() == Instruction::Store) {
+                            		auto iterator_for_store_check = inst;
+                            		iterator_for_store_check++;
+			    		StoreInst *si = dyn_cast<StoreInst>(my_inst);
+			    		if (si && si->isVolatile()) {
+                				duplicate_inst = inst;
+                				inst++;
+						continue;	
+			    		}
+                            		while (iterator_for_store_check!=basic_block->end()) {
+                                		Instruction *cur_inst = &(*iterator_for_store_check);
+                                		if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(1) == cur_inst->getOperand(1) && (my_inst->getOperand(0))->getType() == (cur_inst->getOperand(0))->getType()) {
+                                		    my_inst->eraseFromParent();
+                                		    CSEStElim++;
+                                		    inst = duplicate_inst;
+                                		    break; 
+                                		} else if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(1) == cur_inst->getOperand(0) && (my_inst->getOperand(0))->getType() == cur_inst->getType()) {
+                					LoadInst *li = dyn_cast<LoadInst>(cur_inst);
+                                		    	if (li && li->isVolatile()) {
+               							break;
+                								
+             						}
+                					iterator_for_store_check++;
+               						//std::cout << " I am here5 " << std::endl;
+              						cur_inst->replaceAllUsesWith(my_inst->getOperand(0));
+                                		    	cur_inst->eraseFromParent();
+                					CSEStore2Load++;
+                                			//iterator_for_store_check++;
+							continue;
+						}  
+						if ( cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke || cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Load) {break;}
+                                		iterator_for_store_check++;
+                            		}
+                        	}
                 		duplicate_inst = inst;
-                		inst++;
-				continue;	
-			    }
-                            while (iterator_for_store_check!=basic_block->end()) {
-                                Instruction *cur_inst = &(*iterator_for_store_check);
-                                if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(1) == cur_inst->getOperand(1) && (my_inst->getOperand(0))->getType() == (cur_inst->getOperand(0))->getType()) {
-                                    /*StoreInst *si = dyn_cast<StoreInst>(my_inst);
-                                    if (si && si->isVolatile()) {
-                						break;
-                						
-                					}*/
-                                    my_inst->eraseFromParent();
-                                    CSEStElim++;
-                                    inst = duplicate_inst;
-                                    break; 
-                                } else if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(1) == cur_inst->getOperand(0) && (my_inst->getOperand(0))->getType() == cur_inst->getType()) {
-                			LoadInst *li = dyn_cast<LoadInst>(cur_inst);
-                                    	if (li && li->isVolatile()) {
-               					break;
-                						
-             				}
-                			iterator_for_store_check++;
-               				//std::cout << " I am here5 " << std::endl;
-              				cur_inst->replaceAllUsesWith(my_inst->getOperand(0));
-                                    	cur_inst->eraseFromParent();
-                			CSEStore2Load++;
-                                	//iterator_for_store_check++;
-					continue;
-				}  
-				if ( cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke || cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Load) {break;}
-                                	iterator_for_store_check++;
-                            	}
-                        }
-                	duplicate_inst = inst;
-                	inst++;	
+                		inst++;	
 			} else {
-					BB = &(*basic_block);
-					//bool is_dominate = DominatorTree::dominates(my_inst,BB);
-					for (auto new_bb_itr= func->begin(); new_bb_itr!=func->end(); new_bb_itr++) {
-						BasicBlock *BB1 = &(*new_bb_itr);
-						//std::cout << " before calling dominator " << std::endl;
-						bool is_dominate = DT.dominates(BB,BB1);
-						bool is_same_block = false;
-                        if (BB==BB1) {
-                            is_same_block = true;
-                        }
-						//std::cout << " before opt " << std::endl;
-						//BB->begin()->print(errs());
-						//BB1->begin()->print(errs());
-						if (is_dominate) {
-							cse_opt(my_inst, BB1, is_same_block);
-						}
-						//std::cout << " after opt " << std::endl;
-						//std::cout << " is_dominate " << is_dominate << std::endl;
-						
+				BB = &(*basic_block);
+				for (auto new_bb_itr= func->begin(); new_bb_itr!=func->end(); new_bb_itr++) {
+					BasicBlock *BB1 = &(*new_bb_itr);
+					bool is_dominate = DT.dominates(BB,BB1);
+					bool is_same_block = false;
+                        		if (BB==BB1) {
+                            			is_same_block = true;
+                        		}
+					if (is_dominate) {
+						cse_opt(my_inst, BB1, is_same_block);
 					}
+						
+				}
 					duplicate_inst = inst;
 					inst++;
 				}
@@ -377,187 +330,7 @@ static void CommonSubexpressionElimination(Module *M) {
 	//PrintInstructions(M);
 
 }
-/* static void ReplaceLoadCSE_opt (Instruction *inst, BasicBlock *BB) {
- 
-    // looping over basic block 
-    auto duplicate_inst = inst;
-	//auto inst=basic_block->begin();
-	while (inst!=BB->end()) {
-		 Instruction *my_inst = &(*inst);
-        if (my_inst->getOpcode() == Instruction::Load ) {
-			//std::cout << " I am here " << std::endl;
-			//my_inst->print(errs());
-			auto iterator_for_load = inst;
-			iterator_for_load++;
-			//iterator_for_load->print(errs());
-			while (iterator_for_load!=basic_block->end()) {
-				//errs() << " Printing instructions \n";
-				//PrintInstructions(M);
-				//std::cout << " printing Instructions done " << std::endl;
-				//std::cout << " I am here1 " << std::endl;
-				Instruction *cur_inst = &(*iterator_for_load);
-				//std::cout << " I am here2 " << std::endl;
-				//cur_inst->print(errs());
-				//if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(0) == cur_inst->getOperand(1) ) {break;}
-				if (cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke) {break;}
-				//std::cout << " I am here3 " << std::endl;
-				if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(0) == cur_inst->getOperand(0) && my_inst->getType() == cur_inst->getType()) {
-					LoadInst *li = dyn_cast<LoadInst>(cur_inst);
-					//std::cout << " I am here4 " << std::endl;
-					if (li && li->isVolatile()) {
-						break;
-						
-					}
-					iterator_for_load++;
-					//std::cout << " I am here5 " << std::endl;
-					//replaceUses(my_inst,cur_inst);
-					cur_inst->replaceAllUsesWith(my_inst);
-                    cur_inst->eraseFromParent();
-					CSELdElim++;
-                }
 
-				iterator_for_load++;	
-            }
-        } else if (my_inst->getOpcode() == Instruction::Store) {
-            auto iterator_for_store_check = inst;
-            iterator_for_store_check++;
-            while (iterator_for_store_check!=basic_block->end()) {
-                Instruction *cur_inst = &(*iterator_for_store_check);
-                if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(1) == cur_inst->getOperand(1) && (my_inst->getOperand(0))->getType() == (cur_inst->getOperand(0))->getType()) {
-                    StoreInst *si = dyn_cast<StoreInst>(my_inst);
-                    if (si && si->isVolatile()) {
-						break;
-						
-					}
-                    my_inst->eraseFromParent();
-                    CSEStElim++;
-                    inst = duplicate_inst;
-                    break; 
-                }
-                if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(1) == cur_inst->getOperand(0) && (my_inst->getOperand(0))->getType() == cur_inst->getType()) {
-					LoadInst *li = dyn_cast<LoadInst>(cur_inst);
-                    if (li && li->isVolatile()) {
-						break;
-						
-					}
-					iterator_for_store_check++;
-					//std::cout << " I am here5 " << std::endl;
-					cur_inst->replaceAllUsesWith(my_inst->getOperand(0));
-                    cur_inst->eraseFromParent();
-					CSEStore2Load++;
-                }
-				if ( cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke || cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Load) {break;}
-                iterator_for_store_check++;
-            }
-        }
-		duplicate_inst = inst;
-		inst++;	
-    }
- }*/
-
- static void ReplaceLoadCSE (Module *M) {
- 
-	for (auto func = M->begin(); func!=M->end(); func++) {
-        for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
-            // looping over basic block 
-		    auto duplicate_inst = basic_block->begin();
-			auto inst=basic_block->begin();
-			while (inst!=basic_block->end()) {
-				 Instruction *my_inst = &(*inst);
-                if (my_inst->getOpcode() == Instruction::Load ) {
-					//std::cout << " I am here " << std::endl;
-					//my_inst->print(errs());
-					auto iterator_for_load = inst;
-					iterator_for_load++;
-					//iterator_for_load->print(errs());
-					while (iterator_for_load!=basic_block->end()) {
-						//errs() << " Printing instructions \n";
-						//PrintInstructions(M);
-						//std::cout << " printing Instructions done " << std::endl;
-						//std::cout << " I am here1 " << std::endl;
-						Instruction *cur_inst = &(*iterator_for_load);
-						//std::cout << " I am here2 " << std::endl;
-						//cur_inst->print(errs());
-						//if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(0) == cur_inst->getOperand(1) ) {break;}
-						if (cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke) {break;}
-						//std::cout << " I am here3 " << std::endl;
-						if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(0) == cur_inst->getOperand(0) && my_inst->getType() == cur_inst->getType()) {
-							LoadInst *li = dyn_cast<LoadInst>(cur_inst);
-							//std::cout << " I am here4 " << std::endl;
-							if (li && li->isVolatile()) {
-								break;
-								
-							}
-							iterator_for_load++;
-							//std::cout << " I am here5 " << std::endl;
-							//replaceUses(my_inst,cur_inst);
-							cur_inst->replaceAllUsesWith(my_inst);
-                            cur_inst->eraseFromParent();
-							CSELdElim++;
-                        }
-
-						iterator_for_load++;	
-                    }
-                } else if (my_inst->getOpcode() == Instruction::Store) {
-                    auto iterator_for_store_check = inst;
-                    iterator_for_store_check++;
-                    while (iterator_for_store_check!=basic_block->end()) {
-                        Instruction *cur_inst = &(*iterator_for_store_check);
-                        if (cur_inst->getOpcode() == Instruction::Store && my_inst->getOperand(1) == cur_inst->getOperand(1) && (my_inst->getOperand(0))->getType() == (cur_inst->getOperand(0))->getType()) {
-                            StoreInst *si = dyn_cast<StoreInst>(my_inst);
-                            if (si && si->isVolatile()) {
-								break;
-								
-							}
-                            my_inst->eraseFromParent();
-                            CSEStElim++;
-                            inst = duplicate_inst;
-                            break; 
-                        }
-                        if (cur_inst->getOpcode() == Instruction::Load && my_inst->getOperand(1) == cur_inst->getOperand(0) && (my_inst->getOperand(0))->getType() == cur_inst->getType()) {
-							LoadInst *li = dyn_cast<LoadInst>(cur_inst);
-                            if (li && li->isVolatile()) {
-								break;
-								
-							}
-							iterator_for_store_check++;
-							//std::cout << " I am here5 " << std::endl;
-							cur_inst->replaceAllUsesWith(my_inst->getOperand(0));
-                            cur_inst->eraseFromParent();
-							CSEStore2Load++;
-                        }
-						if ( cur_inst->getOpcode() == Instruction::Call || cur_inst->getOpcode() == Instruction::Invoke || cur_inst->getOpcode() == Instruction::Store || cur_inst->getOpcode() == Instruction::Load) {break;}
-                        iterator_for_store_check++;
-                    }
-                }
-				duplicate_inst = inst;
-				inst++;	
-            }
-        }
-    }
-}
-static void replaceUses(Instruction *inst_to_replace_with, Instruction* inst_to_replace) {
-// This function replaces use of cur_inst with my_inst
-	using use_iterator = Value::use_iterator;
-	std::set<Instruction*> all_uses;
-	for(use_iterator u = inst_to_replace->use_begin(); u!=inst_to_replace->use_end(); u++)
-	{
-		Value *v = u->getUser();
-		all_uses.insert(dyn_cast<Instruction>(v));
-	}
-	while(all_uses.size()>0) {
-		Instruction *inst_to_update = *all_uses.begin();
-		for(unsigned op=0; op < inst_to_update->getNumOperands(); op++) {
-			Instruction* def = dyn_cast<Instruction> (inst_to_update->getOperand(op));
-			if (def != NULL) {
-				if (def == inst_to_replace) {
-					dyn_cast<Instruction>(inst_to_update)->setOperand(op,inst_to_replace_with);
-				}
-			}
-		}
-		all_uses.erase(inst_to_update);
-	}
-}
 
 
 
@@ -671,19 +444,12 @@ static void cse_opt(Instruction *my_inst, BasicBlock* BB, bool is_same_block) {
 		return;
 	}
 	
-	//std::cout << " printing my_inst " << std::endl;
-	//my_inst->print(errs(), true);
-	//std::cout << std::endl;
-	// If the basic block contains the original instruction
-	// we need to parse only the instructions
-	// below current instruction
 	auto inst1=BB->begin();
 	if (is_same_block) {
 		Instruction *cur_inst = &(*inst1);
 		while (cur_inst!=my_inst) {
-            //std::cout << " I am here " << std::endl;
-            inst1++;
-            cur_inst = &(*inst1);
+            		inst1++;
+            		cur_inst = &(*inst1);
 		}
 	}
 	for (auto inst=inst1; inst!=BB->end(); inst++) {	
@@ -696,7 +462,6 @@ static void cse_opt(Instruction *my_inst, BasicBlock* BB, bool is_same_block) {
             		ICmpInst *my_inst_icmp = cast<ICmpInst>(my_inst);
             		ICmpInst *cur_inst_icmp = cast<ICmpInst>(cur_inst);
             		if (my_inst_icmp->getPredicate()!=cur_inst_icmp->getPredicate()) { continue; }
-            		//std::cout << " ICmp" << std::endl;
         	} 
         bool all_operands_matching = true;
 		for(unsigned op=0; op < my_inst->getNumOperands(); op++) {
@@ -715,28 +480,6 @@ static void cse_opt(Instruction *my_inst, BasicBlock* BB, bool is_same_block) {
 		Instruction* i= *matching_instruction.begin();
 		matching_instruction.erase(i);
 		i->replaceAllUsesWith(my_inst);
-        // loop over all the uses of i to remove 
-		/*using use_iterator = Value::use_iterator;
-		std::set<Instruction*> all_uses;
-		for(use_iterator u = i->use_begin(); u!=i->use_end(); u++) {
-			Value *v = u->getUser();
-			all_uses.insert(dyn_cast<Instruction>(v));
-		}
-		while(all_uses.size()>0) {
-			Instruction *inst_to_update = *all_uses.begin();
-			for(unsigned op=0; op < inst_to_update->getNumOperands(); op++) {
-				Instruction* def = dyn_cast<Instruction> (inst_to_update->getOperand(op));
-				if (def != NULL) {
-					if (def == i) {
-						dyn_cast<Instruction>(inst_to_update)->setOperand(op,my_inst);
-					}
-				}
-			}
-			all_uses.erase(inst_to_update);
-		}*/
-		//std::cout << " printing CSE instruction " << std::endl;
-		//i->print(errs(), true);
-		//std::cout << std::endl;
 		i->eraseFromParent();
 		CSEElim++;
 	}
