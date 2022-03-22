@@ -33,11 +33,9 @@ static bool isDead(Instruction &);
 static bool Simplify_Inst(Instruction *, Module*);
 static void cse_opt(Instruction *, BasicBlock*, bool );
 static void CommonSubexpressionElimination_new(Module *M);
-static void replaceUses(Instruction*, Instruction* );
 static void summarize(Module *M);
 static void print_csv_file(std::string outputfile);
 static void PrintInstructions(Module *);
-static void ReplaceLoadCSE (Module *);
 static cl::opt<std::string>
         InputFilename(cl::Positional, cl::desc("<input bitcode>"), cl::Required, cl::init("-"));
 
@@ -174,12 +172,10 @@ static void CommonSubexpressionElimination(Module *M) {
 	//PrintInstructions(M);
 	//std::cout << " printing Instructions done " << std::endl;
 	BasicBlock *BB;
-	int func_count = 0;
 	for (auto func = M->begin(); func!=M->end(); func++) {
 		DominatorTree DT; 	
 		bool is_empty = func->empty();
 		if (is_empty) { continue; }
-		func_count++;
 		DT.recalculate(*func);
         // looping over functions
         for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
@@ -401,14 +397,8 @@ static bool isDead(Instruction &I) {
 }
 
 static void PrintInstructions(Module *M) {
-	int func_count = 0;
 	for (auto func = M->begin(); func!=M->end(); func++) {
-		// looping over functions
-		//std::cout << " function count " << func_count << std::endl;
-	    //if (func->empty() == true) {continue;}
-            //func_count++;
-	
-        for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
+        	for (auto basic_block= func->begin(); basic_block!=func->end(); basic_block++) {
 			// looping over basic block 
 			for (auto inst=basic_block->begin(); inst!=basic_block->end(); inst++) {
 				Instruction *my_inst = &(*inst);
@@ -423,9 +413,6 @@ static void PrintInstructions(Module *M) {
 
 static bool Simplify_Inst(Instruction *my_inst, Module* M) {
 
-	/*if (my_inst->getOpcode() == Instruction::Load || my_inst->getOpcode() == Instruction::Alloca || my_inst->getOpcode() == Instruction::Store || my_inst->getOpcode() == Instruction::FCmp || my_inst->getOpcode() == Instruction::VAArg || my_inst->getOpcode() == Instruction::Call ) {
-		return false;
-	}*/
 	DataLayout my_dl(&(*M));
 	SimplifyQuery x(my_dl);
 	Value* my_simplified_inst = SimplifyInstruction(my_inst,x);
